@@ -1,0 +1,2 @@
+web: ./notification-service
+

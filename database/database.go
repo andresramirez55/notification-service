@@ -1,9 +1,10 @@
 package database
 
 import (
+	"fmt"
+	"log"
 	"notification-service/config"
 	"notification-service/models"
-	"log"
 	"os"
 
 	"gorm.io/driver/postgres"
@@ -75,7 +76,10 @@ func getDBType(databaseURL string) string {
 	return "SQLite"
 }
 
-func GetDB() *gorm.DB {
-	return DB
+func GetDB() (*gorm.DB, error) {
+	if DB == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	return DB, nil
 }
 

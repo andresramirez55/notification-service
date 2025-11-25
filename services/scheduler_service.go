@@ -33,24 +33,19 @@ func NewSchedulerService(eventRepo *repositories.EventRepository, emailService *
 	}
 }
 
-// Start inicia el scheduler
 func (s *SchedulerService) Start() {
 	log.Println("🚀 Starting notification scheduler...")
 
-	// Ejecutar inmediatamente al inicio
 	go s.checkAndSendNotifications()
 
-	// Programar verificación cada hora
 	s.cron.AddFunc("0 * * * *", s.checkAndSendNotifications)
 
-	// También programar verificación diaria a las 9:00 AM UTC para eventos del día siguiente
 	s.cron.AddFunc("0 9 * * *", s.checkDayBeforeReminders)
 
 	s.cron.Start()
 	log.Println("✅ Notification scheduler started - checking every hour")
 }
 
-// Stop detiene el scheduler
 func (s *SchedulerService) Stop() {
 	if s.cron != nil {
 		s.cron.Stop()
@@ -58,18 +53,14 @@ func (s *SchedulerService) Stop() {
 	}
 }
 
-// checkAndSendNotifications verifica y envía notificaciones
 func (s *SchedulerService) checkAndSendNotifications() {
 	log.Println("🔍 Checking for notifications to send...")
 
-	// Verificar eventos para mañana (día anterior)
 	s.checkDayBeforeReminders()
 
-	// Verificar eventos para hoy (mismo día)
 	s.checkSameDayReminders()
 }
 
-// checkDayBeforeReminders verifica eventos para mañana
 func (s *SchedulerService) checkDayBeforeReminders() {
 	log.Println("📅 Checking for day-before reminders (tomorrow's events)...")
 
@@ -91,7 +82,6 @@ func (s *SchedulerService) checkDayBeforeReminders() {
 	}
 }
 
-// checkSameDayReminders verifica eventos para hoy
 func (s *SchedulerService) checkSameDayReminders() {
 	log.Println("📅 Checking for same-day reminders (today's events)...")
 
@@ -109,46 +99,37 @@ func (s *SchedulerService) checkSameDayReminders() {
 	log.Printf("📧 Found %d events for today, sending notifications...", len(events))
 
 	for _, event := range events {
-		// Verificar si es hora de enviar (1 hora antes del evento)
 		if s.shouldSendReminderNow(event) {
 			s.sendEventNotification(event, "same_day")
 		}
 	}
 }
 
-// shouldSendReminderNow verifica si es hora de enviar el recordatorio (1 hora antes)
 func (s *SchedulerService) shouldSendReminderNow(event *models.Event) bool {
 	if event.Time == "" || event.IsAllDay {
-		// Para eventos de todo el día, enviar en la mañana
 		now := time.Now()
 		return now.Hour() >= 8 && now.Hour() < 9
 	}
 
-	// Parsear hora del evento
 	eventTime, err := time.Parse("15:04", event.Time)
 	if err != nil {
 		log.Printf("⚠️ Error parsing time for event %d: %v", event.ID, err)
-		return true // En caso de error, enviar de todas formas
+		return true
 	}
 
-	// Crear fecha/hora del evento para hoy
 	today := time.Now()
 	eventDateTime := time.Date(today.Year(), today.Month(), today.Day(),
 		eventTime.Hour(), eventTime.Minute(), 0, 0, today.Location())
 
-	// Enviar 1 hora antes del evento
 	reminderTime := eventDateTime.Add(-1 * time.Hour)
 	now := time.Now()
 
-	// Verificar si estamos en la ventana de tiempo (dentro de la última hora)
 	return now.After(reminderTime) && now.Before(eventDateTime)
 }
 
-// sendEventNotification envía notificaciones para un evento
 func (s *SchedulerService) sendEventNotification(event *models.Event, reminderType string) {
 	log.Printf("📧 Sending %s notification for event: %s (ID: %d)", reminderType, event.Title, event.ID)
 
-	// Enviar email al usuario principal
 	if event.Email != "" {
 		subject, body := s.buildEmailContent(event, reminderType, "")
 		if err := s.emailService.SendEmail(&EmailRequest{
@@ -163,7 +144,6 @@ func (s *SchedulerService) sendEventNotification(event *models.Event, reminderTy
 		}
 	}
 
-	// Enviar notificaciones familiares si está habilitado
 	if event.NotifyFamily {
 		s.sendFamilyNotifications(event, reminderType)
 	}
@@ -188,7 +168,6 @@ func (s *SchedulerService) sendFamilyNotifications(event *models.Event, reminder
 
 	var recipients []FamilyMember
 
-	// Filtrar por rol
 	if event.NotifyPapa {
 		for _, member := range familyMembers {
 			if member.Role == "papa" {
@@ -205,7 +184,6 @@ func (s *SchedulerService) sendFamilyNotifications(event *models.Event, reminder
 		}
 	}
 
-	// Enviar emails a los destinatarios
 	for _, recipient := range recipients {
 		if recipient.Email != "" {
 			subject, body := s.buildEmailContent(event, reminderType, recipient.Name)

@@ -30,40 +30,64 @@ func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
+	// Setup router FIRST so health check works even if DB fails
+	router := gin.Default()
+
+	// Health check endpoint - must work even if DB is down
+	router.GET("/health", func(c *gin.Context) {
+		// Try to check DB connection
+		dbStatus := "unknown"
+		if db, err := database.GetDB(); err == nil && db != nil {
+			sqlDB, err := db.DB()
+			if err == nil {
+				if err := sqlDB.Ping(); err == nil {
+					dbStatus = "connected"
+				} else {
+					dbStatus = "disconnected"
+				}
+			}
+		} else {
+			dbStatus = "not_initialized"
+		}
+
+		statusCode := 200
+		if dbStatus != "connected" {
+			statusCode = 503 // Service Unavailable
+		}
+
+		c.JSON(statusCode, gin.H{
+			"status":      "ok",
+			"service":     "notification-service",
+			"version":     "1.0.0",
+			"database":    dbStatus,
+			"time":        time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Initialize email service (needed for API endpoints and scheduler)
+	emailService := services.NewEmailService(cfg)
+
 	// Initialize database
 	log.Println("🔌 Connecting to database...")
 	db, err := database.InitDB()
 	if err != nil {
-		log.Fatalf("❌ Failed to connect to database: %v", err)
+		log.Printf("❌ Failed to connect to database: %v", err)
+		log.Println("⚠️ Service will start but scheduler will not work until database is available")
+		log.Println("⚠️ Health check will return 503 until database connection is established")
+		// Don't fatal - let the service start so health check works
+	} else {
+		// Initialize repository
+		eventRepo := repositories.NewEventRepository(db)
+
+		// Initialize scheduler service
+		log.Println("⏰ Initializing notification scheduler...")
+		schedulerService := services.NewSchedulerService(eventRepo, emailService)
+		schedulerService.Start()
+		log.Println("✅ Notification scheduler started")
 	}
-
-	// Initialize repository
-	eventRepo := repositories.NewEventRepository(db)
-
-	// Initialize email service
-	emailService := services.NewEmailService(cfg)
-
-	// Initialize scheduler service
-	log.Println("⏰ Initializing notification scheduler...")
-	schedulerService := services.NewSchedulerService(eventRepo, emailService)
-	schedulerService.Start()
-	log.Println("✅ Notification scheduler started")
 
 	// Initialize handlers
 	notificationHandler := handlers.NewNotificationHandler(emailService)
-
-	// Setup router
-	router := gin.Default()
-
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":  "ok",
-			"service": "notification-service",
-			"version": "1.0.0",
-			"time":    time.Now().Format(time.RFC3339),
-		})
-	})
 
 	// Configure CORS
 	corsConfig := cors.DefaultConfig()
@@ -89,7 +113,11 @@ func main() {
 	log.Printf("📧 Notification service starting on port %s", port)
 	log.Println("========================================")
 	log.Println("✅ Ready to accept notification requests!")
-	log.Println("✅ Scheduler is running - checking for events every hour")
+	if db != nil {
+		log.Println("✅ Scheduler is running - checking for events every hour")
+	} else {
+		log.Println("⚠️ Scheduler is NOT running - database connection required")
+	}
 	log.Println("🔍 Test with: curl http://localhost:" + port + "/health")
 	log.Println("========================================")
 

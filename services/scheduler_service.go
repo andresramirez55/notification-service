@@ -53,6 +53,11 @@ func (s *SchedulerService) Stop() {
 	}
 }
 
+// CheckAndSendNotifications es público para poder llamarlo manualmente
+func (s *SchedulerService) CheckAndSendNotifications() {
+	s.checkAndSendNotifications()
+}
+
 func (s *SchedulerService) checkAndSendNotifications() {
 	log.Println("🔍 Checking for notifications to send...")
 

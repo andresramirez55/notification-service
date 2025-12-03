@@ -67,9 +67,13 @@ func main() {
 	// Initialize email service (needed for API endpoints and scheduler)
 	emailService := services.NewEmailService(cfg)
 
+	// Initialize handlers
+	notificationHandler := handlers.NewNotificationHandler(emailService)
+
 	// Initialize database
 	log.Println("🔌 Connecting to database...")
 	db, err := database.InitDB()
+	var schedulerService *services.SchedulerService
 	if err != nil {
 		log.Printf("❌ Failed to connect to database: %v", err)
 		log.Println("⚠️ Service will start but scheduler will not work until database is available")
@@ -81,13 +85,14 @@ func main() {
 
 		// Initialize scheduler service
 		log.Println("⏰ Initializing notification scheduler...")
-		schedulerService := services.NewSchedulerService(eventRepo, emailService)
+		schedulerService = services.NewSchedulerService(eventRepo, emailService)
 		schedulerService.Start()
 		log.Println("✅ Notification scheduler started")
-	}
 
-	// Initialize handlers
-	notificationHandler := handlers.NewNotificationHandler(emailService)
+		// Link scheduler to handler for manual trigger endpoint
+		notificationHandler.SetScheduler(schedulerService)
+		log.Println("✅ Notification scheduler linked to handler")
+	}
 
 	// Configure CORS
 	corsConfig := cors.DefaultConfig()
@@ -101,6 +106,7 @@ func main() {
 	{
 		api.POST("/notifications/email", notificationHandler.SendEmail)
 		api.GET("/notifications/status", notificationHandler.GetStatus)
+		api.POST("/notifications/check", notificationHandler.CheckNotificationsNow)
 	}
 
 	// Get port from environment or use default

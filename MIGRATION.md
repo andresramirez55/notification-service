@@ -11,7 +11,7 @@ Este documento explica cómo se migró la funcionalidad de notificaciones a un m
 - **Funcionalidad**: Envío de emails usando SendGrid
 - **API REST**: Endpoint `/api/v1/notifications/email`
 
-### 2. Backend Principal (`backend-go/`)
+### 2. Backend principal (`back/`)
 
 - **Cambio**: Ya no envía emails directamente
 - **Nuevo**: Usa un cliente HTTP para llamar al microservicio
@@ -69,4 +69,3 @@ Puedes usar docker-compose para levantar ambos servicios localmente.
 - [ ] Implementar retry logic en el cliente
 - [ ] Agregar métricas y logging
 - [ ] Implementar rate limiting
-
